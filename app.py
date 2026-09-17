@@ -11,10 +11,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
-filename = 'modelo-class.pkl'
-modelo, min_max_scaler, variables, _ = pickle.load(open(filename, 'rb'))
 
-# --- 1. CONFIGURACIÓN Y UI MEJORADA (COLORES) ---
 st.set_page_config(page_title="Predicción Cardíaca", page_icon="🫀", layout="centered")
 
 st.markdown("""
@@ -24,29 +21,41 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 2. CARGA DEL MODELO ---
-# Se asume que el modelo guardado retorna 3 elementos al igual que en tu ejemplo
+# --- CARGA ROBUSTA DEL MODELO ---
 try:
-    filename = 'modelo.pkl' # Asegúrate de que este sea el nombre real de tu archivo
-    modelo, min_max_scaler, variables = pickle.load(open(filename, 'rb'))
-except Exception as e:
-    st.error("Por favor, asegúrate de colocar tu archivo .pkl en la misma carpeta.")
+    filename = 'modelo-class.pkl'
+    elementos = pickle.load(open(filename, 'rb'))
 
-# --- 3. INTERFAZ GRÁFICA PARA CAPTURA DE DATOS ---
+    modelo = elementos[0] # El modelo suele ser siempre el primer elemento
+    min_max_scaler = None
+    variables = None
+
+    # Búsqueda dinámica para evitar errores de desempaquetado y de LabelEncoder
+    for obj in elementos[1:]:
+        if isinstance(obj, (list, np.ndarray, pd.Index)) and 'age' in obj:
+            variables = obj
+        elif hasattr(obj, 'transform') and not hasattr(obj, 'classes_'):
+            # Los MinMax o Standard Scalers tienen 'transform' pero no 'classes_'
+            min_max_scaler = obj
+
+except Exception as e:
+    st.error("Asegúrate de tener el archivo modelo-class.pkl en la misma carpeta.")
+    st.stop()
+
+# --- INTERFAZ GRÁFICA ---
 st.markdown("<h4 style='color: #457B9D;'>Ingresa los datos del paciente:</h4>", unsafe_allow_html=True)
 
-# Usamos columnas para darle un orden más limpio y espaciado a los colores
 col1, col2 = st.columns(2)
 
 with col1:
-    age = st.slider('Edad[cite: 1]', min_value=1, max_value=100, value=40, step=1)
-    ever_married = st.selectbox('¿Alguna vez casado?[cite: 1]', ['Yes', 'No'])
-    smoking_status = st.selectbox('Estado de tabaquismo[cite: 1]', ["'never smoked'", "smokes", "formerly smoked", "Unknown"])
+    age = st.slider('Edad', min_value=1, max_value=100, value=40, step=1)
+    ever_married = st.selectbox('¿Alguna vez casado?', ['Yes', 'No'])
+    smoking_status = st.selectbox('Estado de tabaquismo', ["'never smoked'", "smokes", "formerly smoked", "Unknown"])
 
 with col2:
-    avg_glucose_level = st.number_input('Nivel medio de glucosa[cite: 1]', min_value=0.0, max_value=350.0, value=100.0)
-    hypertension = st.selectbox('¿Padece hipertensión?[cite: 1]', ['Yes', 'No'])
-    heart_disease = st.selectbox('¿Enfermedad del corazón previa?[cite: 1]', ['Yes', 'No'])
+    avg_glucose_level = st.number_input('Nivel medio de glucosa', min_value=0.0, max_value=350.0, value=100.0)
+    hypertension = st.selectbox('¿Padece hipertensión?', ['Yes', 'No'])
+    heart_disease = st.selectbox('¿Enfermedad del corazón previa?', ['Yes', 'No'])
 
 # Dataframe con la captura de datos
 datos = [[age, hypertension, heart_disease, ever_married, avg_glucose_level, smoking_status]]
@@ -54,27 +63,29 @@ data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'eve
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- 4. 1 BOTÓN DE PREDICCIÓN ---
+# --- PREDICCIÓN ---
 if st.button('🧠 Ejecutar Predicción', use_container_width=True):
 
-    # Preparación de los datos futuros tal como en tu código original
     data_preparada = data.copy()
 
-    # En despliegue drop_first= False
+    # Transformar variables categóricas
     data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)
 
-    # Se adicionan las columnas faltantes (igualación con las variables del entrenamiento)
-    data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
+    # Alinear con las variables del modelo
+    if variables is not None:
+        data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
 
-    # Se normalizan los datos numéricos (como Edad y Nivel de Glucosa)
-    # En los despliegues no se llama fit, solo transform
-    data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
+    # Escalar solo si el scaler fue encontrado correctamente
+    if min_max_scaler is not None:
+        data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
 
-    # Predicción
+    # Realizar la predicción
     Y_pred = modelo.predict(data_preparada)
 
-    # --- 5. RESULTADO VISUAL MEJORADO ---
+    # --- RESULTADO VISUAL ---
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # Ajustamos la condición asumiendo que un LabelEncoder pudo haber convertido 'Yes' en 1
     if Y_pred[0] == 'Yes' or Y_pred[0] == 1:
         st.markdown("""
         <div style='background-color: #FAD2E1; padding: 20px; border-radius: 10px; border-left: 8px solid #E63946;'>
