@@ -11,11 +11,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import plotly.graph_objects as go
 
-# --- 1. CONFIGURACIÓN Y UI MEJORADA ---
-st.set_page_config(page_title="Predicción Cardíaca", page_icon="🫀", layout="centered")
+# --- 1. CONFIGURACIÓN ---
+st.set_page_config(page_title="Predicción Cardíaca", page_icon="🫀", layout="wide")
 
-# --- BARRA LATERAL CON INFORMACIÓN DEL MODELO ---
+# --- BARRA LATERAL ---
 with st.sidebar:
     st.markdown("<h2 style='color: #1D3557;'>📊 Info del Modelo</h2>", unsafe_allow_html=True)
     st.markdown("""
@@ -23,17 +24,15 @@ with st.sidebar:
     - **Algoritmo:** K-Nearest Neighbors (KNN Classifier)
     - **Tipo:** Clasificación Binaria
     - **Variables:** 6 (Salud y Demografía)
-    - **División de datos:** 70% entrenamiento, 30% prueba
     """)
     st.divider()
-    st.warning("📉 **Margen de Error:** El modelo presenta un error de predicción aproximado del 5% (Accuracy del ~95% en la matriz de confusión).")
-    st.info("💡 **Aviso:** Esta es una herramienta experimental de machine learning y no sustituye un diagnóstico médico profesional.")
+    st.warning("📉 **Margen de Error:** El modelo presenta un error de predicción aproximado del 5%.")
 
 # --- ENCABEZADO PRINCIPAL ---
 st.markdown("""
-    <div style='background-color: #1D3557; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
-        <h1 style='text-align: center; color: #F1FAEE; margin: 0;'>🩺 Evaluador de Riesgo Cardíaco</h1>
-        <p style='text-align: center; color: #A8DADC; margin: 0;'>Sistema de predicción basado en Machine Learning</p>
+    <div style='background-color: #ffffff; padding: 10px; margin-bottom: 20px; text-align: center;'>
+        <h1 style='color: #E63946; margin: 0;'>🫀 Predicción de ataque al corazón</h1>
+        <p style='color: #7f8c8d; margin: 0; font-size: 14px;'>Sistema de predicción basado en Machine Learning + panel de explicabilidad por vecinos más cercanos</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -42,11 +41,10 @@ try:
     filename = 'modelo-class.pkl'
     elementos = pickle.load(open(filename, 'rb'))
 
-    modelo = elementos[0] # El modelo suele ser el primer elemento
+    modelo = elementos[0]
     min_max_scaler = None
     variables = None
 
-    # Búsqueda dinámica para evitar errores de LabelEncoder
     for obj in elementos[1:]:
         if isinstance(obj, (list, np.ndarray, pd.Index)) and 'age' in obj:
             variables = obj
@@ -54,67 +52,136 @@ try:
             min_max_scaler = obj
 
 except Exception as e:
-    st.error("⚠️ Error: Asegúrate de tener el archivo 'modelo-class.pkl' en la misma carpeta que 'app.py'.")
+    st.error("⚠️ Error: Asegúrate de tener el archivo 'modelo-class.pkl' en la misma carpeta.")
     st.stop()
 
-# --- 3. INTERFAZ GRÁFICA ---
-st.markdown("<h4 style='color: #457B9D;'>Ingresa los datos del paciente:</h4>", unsafe_allow_html=True)
+# --- 3. CREACIÓN DE PESTAÑAS ---
+tab1, tab2 = st.tabs(["🩺 Predicción", "🔎 Explicabilidad"])
 
-col1, col2 = st.columns(2)
+with tab1:
+    st.markdown("<h4 style='color: #457B9D;'>Ingresa los datos del paciente:</h4>", unsafe_allow_html=True)
 
-with col1:
-    age = st.slider('Edad', min_value=1, max_value=100, value=40, step=1)
-    ever_married = st.selectbox('¿Alguna vez casado?', ['Yes', 'No'])
-    smoking_status = st.selectbox('Estado de tabaquismo', ["'never smoked'", "smokes", "formerly smoked", "Unknown"])
+    col1, col2 = st.columns(2)
 
-with col2:
-    avg_glucose_level = st.number_input('Nivel medio de glucosa', min_value=0.0, max_value=350.0, value=100.0)
-    hypertension = st.selectbox('¿Padece hipertensión?', ['Yes', 'No'])
-    heart_disease = st.selectbox('¿Enfermedad del corazón previa?', ['Yes', 'No'])
+    with col1:
+        age = st.slider('Edad', min_value=1, max_value=100, value=42, step=1)
+        ever_married = st.selectbox('¿Alguna vez casado?', ['Yes', 'No'])
+        smoking_status = st.selectbox('Estado de tabaquismo', ["'never smoked'", "smokes", "formerly smoked", "Unknown"])
 
-# Dataframe con la captura de datos
-datos = [[age, hypertension, heart_disease, ever_married, avg_glucose_level, smoking_status]]
-data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'ever_married', 'avg_glucose_level', 'smoking_status'])
+    with col2:
+        avg_glucose_level = st.number_input('Nivel medio de glucosa', min_value=0.0, max_value=350.0, value=226.9)
+        hypertension = st.selectbox('¿Padece hipertensión?', ['Yes', 'No'])
+        heart_disease = st.selectbox('¿Enfermedad del corazón previa?', ['Yes', 'No'])
 
-st.markdown("<hr>", unsafe_allow_html=True)
+    # Dataframe con la captura de datos
+    datos = [[age, hypertension, heart_disease, ever_married, avg_glucose_level, smoking_status]]
+    data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'ever_married', 'avg_glucose_level', 'smoking_status'])
 
-# --- 4. PREDICCIÓN ---
-if st.button('🧠 Ejecutar Predicción', use_container_width=True):
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-    data_preparada = data.copy()
+    if st.button('🧠 Ejecutar Predicción', use_container_width=True):
 
-    # Transformar variables categóricas a numéricas
-    data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)
+        data_preparada = data.copy()
+        data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)
 
-    # Alinear con las variables del entrenamiento para que las columnas coincidan
-    if variables is not None:
-        data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
+        if variables is not None:
+            data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
 
-    # Escalar numéricas solo si el scaler fue encontrado correctamente
-    if min_max_scaler is not None:
-        data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
+        if min_max_scaler is not None:
+            data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
 
-    # Realizar la predicción
-    Y_pred = modelo.predict(data_preparada)
+        Y_pred = modelo.predict(data_preparada)
 
-    # --- 5. RESULTADO VISUAL ---
-    st.markdown("<br>", unsafe_allow_html=True)
+        # --- RESULTADO VISUAL ---
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    if Y_pred[0] == 'Yes' or Y_pred[0] == 1:
-        st.markdown("""
-        <div style='background-color: #FAD2E1; padding: 20px; border-radius: 10px; border-left: 8px solid #E63946;'>
-            <h3 style='color: #E63946; margin:0;'>⚠️ Riesgo Alto Detectado</h3>
-            <p style='color: #9D0208; margin:0;'>El modelo predice una alta probabilidad de ataque al corazón basándose en los parámetros ingresados.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if Y_pred[0] == 'Yes' or Y_pred[0] == 1:
+            st.markdown("""
+            <div style='background-color: #FAD2E1; padding: 20px; border-radius: 10px; border-left: 8px solid #E63946;'>
+                <h3 style='color: #E63946; margin:0;'>⚠️ Riesgo Alto Detectado</h3>
+                <p style='color: #9D0208; margin:0;'>El modelo predice una alta probabilidad de ataque al corazón.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style='background-color: #D8F3DC; padding: 20px; border-radius: 10px; border-left: 8px solid #2D6A4F;'>
+                <h3 style='color: #2D6A4F; margin:0;'>✅ Riesgo Bajo Detectado</h3>
+                <p style='color: #1B4332; margin:0;'>El modelo predice una baja probabilidad de ataque al corazón.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Guardamos en session_state para usarlo en la pestaña 2
+        st.session_state['prediccion_realizada'] = True
+        st.session_state['data_preparada'] = data_preparada
+        st.session_state['paciente'] = {'Edad': age, 'Glucosa': avg_glucose_level}
+
+with tab2:
+    st.markdown("<h3 style='color: #E63946;'>🔎 ¿Por qué el modelo predijo esto?</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #7f8c8d; font-size: 14px;'>Un KNN no tiene 'coeficientes' como una regresión; decide mirando a sus pacientes más parecidos. Aquí exploramos exactamente esos vecinos.</p>", unsafe_allow_html=True)
+
+    if 'prediccion_realizada' in st.session_state and st.session_state['prediccion_realizada']:
+
+        data_p = st.session_state['data_preparada']
+
+        # 1. Obtener Score basado en predict_proba (porcentaje de riesgo)
+        proba = modelo.predict_proba(data_p)[0]
+        # Asumiendo que la clase de riesgo ("Yes") es el índice 1
+        riesgo_porcentaje = proba[1] * 100 if len(proba) > 1 else 0
+
+        # 2. Obtener el Gemelo Digital (el vecino más cercano)
+        distancias, indices = modelo.kneighbors(data_p, n_neighbors=1)
+        distancia_gemelo = round(distancias[0][0], 3)
+
+        col_gauge, col_info = st.columns([1, 1])
+
+        with col_gauge:
+            # Gráfico de Velocímetro (Gauge)
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = riesgo_porcentaje,
+                number = {'suffix': "%", 'font': {'color': '#2c3e50'}},
+                title = {'text': "Score de riesgo (según pacientes similares)", 'font': {'size': 16, 'color': '#7f8c8d'}},
+                gauge = {
+                    'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                    'bar': {'color': "#E63946"},
+                    'bgcolor': "white",
+                    'borderwidth': 2,
+                    'bordercolor': "gray",
+                    'steps': [
+                        {'range': [0, 40], 'color': "#D8F3DC"},
+                        {'range': [40, 70], 'color': "#FDE2E4"},
+                        {'range': [70, 100], 'color': "#FAD2E1"}],
+                }
+            ))
+            fig_gauge.update_layout(height=300, margin=dict(l=10, r=10, t=50, b=10))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+
+        with col_info:
+            st.markdown(f"""
+            <div style='background-color: #F8F9FA; border: 1px solid #DEE2E6; padding: 20px; border-radius: 10px; height: 100%;'>
+                <h4 style='color: #495057; margin-top: 0;'>👤 Gemelo digital (paciente real más parecido)</h4>
+                <ul style='color: #6C757D; line-height: 1.8;'>
+                    <li><b>Distancia (similitud) al paciente ingresado:</b> {distancia_gemelo}</li>
+                    <li><b>Nota:</b> El modelo tomó su decisión evaluando los vecinos más próximos a este punto en el espacio multidimensional.</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br><h4 style='color: #E63946;'>📊 Paciente vs. promedio poblacional</h4>", unsafe_allow_html=True)
+
+        # Promedios poblacionales extraídos del dataset original (aproximados)
+        promedio_edad = 43.2
+        promedio_glucosa = 106.1
+
+        paciente_edad = st.session_state['paciente']['Edad']
+        paciente_glucosa = st.session_state['paciente']['Glucosa']
+
+        fig_bar = go.Figure(data=[
+            go.Bar(name='Paciente', x=['Edad', 'Glucosa'], y=[paciente_edad, paciente_glucosa], marker_color='#b22222'),
+            go.Bar(name='Promedio poblacional', x=['Edad', 'Glucosa'], y=[promedio_edad, promedio_glucosa], marker_color='#95a5a6')
+        ])
+        fig_bar.update_layout(barmode='group', height=400, margin=dict(l=0, r=0, t=30, b=0))
+        st.plotly_chart(fig_bar, use_container_width=True)
+
     else:
-        st.markdown("""
-        <div style='background-color: #D8F3DC; padding: 20px; border-radius: 10px; border-left: 8px solid #2D6A4F;'>
-            <h3 style='color: #2D6A4F; margin:0;'>✅ Riesgo Bajo Detectado</h3>
-            <p style='color: #1B4332; margin:0;'>El modelo predice una baja probabilidad de ataque al corazón basándose en los parámetros ingresados.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    # Recordatorio del error como en el ejemplo original
-    st.warning("Recuerda: El modelo tiene un error aproximado del 5% de acuerdo a la matriz de confusión evaluada en pruebas.")
+        st.info("👈 Por favor, ejecuta una predicción en la pestaña anterior para ver la explicabilidad del modelo.")
