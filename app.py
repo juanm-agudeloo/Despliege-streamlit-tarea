@@ -12,8 +12,24 @@ import pandas as pd
 import numpy as np
 import pickle
 
+# --- 1. CONFIGURACIÓN Y UI MEJORADA ---
 st.set_page_config(page_title="Predicción Cardíaca", page_icon="🫀", layout="centered")
 
+# --- BARRA LATERAL CON INFORMACIÓN DEL MODELO ---
+with st.sidebar:
+    st.markdown("<h2 style='color: #1D3557;'>📊 Info del Modelo</h2>", unsafe_allow_html=True)
+    st.markdown("""
+    **Detalles Técnicos:**
+    - **Algoritmo:** K-Nearest Neighbors (KNN Classifier)
+    - **Tipo:** Clasificación Binaria
+    - **Variables:** 6 (Salud y Demografía)
+    - **División de datos:** 70% entrenamiento, 30% prueba
+    """)
+    st.divider()
+    st.warning("📉 **Margen de Error:** El modelo presenta un error de predicción aproximado del 5% (Accuracy del ~95% en la matriz de confusión).")
+    st.info("💡 **Aviso:** Esta es una herramienta experimental de machine learning y no sustituye un diagnóstico médico profesional.")
+
+# --- ENCABEZADO PRINCIPAL ---
 st.markdown("""
     <div style='background-color: #1D3557; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
         <h1 style='text-align: center; color: #F1FAEE; margin: 0;'>🩺 Evaluador de Riesgo Cardíaco</h1>
@@ -21,28 +37,27 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- CARGA ROBUSTA DEL MODELO ---
+# --- 2. CARGA ROBUSTA DEL MODELO ---
 try:
     filename = 'modelo-class.pkl'
     elementos = pickle.load(open(filename, 'rb'))
 
-    modelo = elementos[0] # El modelo suele ser siempre el primer elemento
+    modelo = elementos[0] # El modelo suele ser el primer elemento
     min_max_scaler = None
     variables = None
 
-    # Búsqueda dinámica para evitar errores de desempaquetado y de LabelEncoder
+    # Búsqueda dinámica para evitar errores de LabelEncoder
     for obj in elementos[1:]:
         if isinstance(obj, (list, np.ndarray, pd.Index)) and 'age' in obj:
             variables = obj
         elif hasattr(obj, 'transform') and not hasattr(obj, 'classes_'):
-            # Los MinMax o Standard Scalers tienen 'transform' pero no 'classes_'
             min_max_scaler = obj
 
 except Exception as e:
-    st.error("Asegúrate de tener el archivo modelo-class.pkl en la misma carpeta.")
+    st.error("⚠️ Error: Asegúrate de tener el archivo 'modelo-class.pkl' en la misma carpeta que 'app.py'.")
     st.stop()
 
-# --- INTERFAZ GRÁFICA ---
+# --- 3. INTERFAZ GRÁFICA ---
 st.markdown("<h4 style='color: #457B9D;'>Ingresa los datos del paciente:</h4>", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
@@ -63,40 +78,43 @@ data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'eve
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- PREDICCIÓN ---
+# --- 4. PREDICCIÓN ---
 if st.button('🧠 Ejecutar Predicción', use_container_width=True):
 
     data_preparada = data.copy()
 
-    # Transformar variables categóricas
+    # Transformar variables categóricas a numéricas
     data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)
 
-    # Alinear con las variables del modelo
+    # Alinear con las variables del entrenamiento para que las columnas coincidan
     if variables is not None:
         data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
 
-    # Escalar solo si el scaler fue encontrado correctamente
+    # Escalar numéricas solo si el scaler fue encontrado correctamente
     if min_max_scaler is not None:
         data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
 
     # Realizar la predicción
     Y_pred = modelo.predict(data_preparada)
 
-    # --- RESULTADO VISUAL ---
+    # --- 5. RESULTADO VISUAL ---
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Ajustamos la condición asumiendo que un LabelEncoder pudo haber convertido 'Yes' en 1
     if Y_pred[0] == 'Yes' or Y_pred[0] == 1:
         st.markdown("""
         <div style='background-color: #FAD2E1; padding: 20px; border-radius: 10px; border-left: 8px solid #E63946;'>
             <h3 style='color: #E63946; margin:0;'>⚠️ Riesgo Alto Detectado</h3>
-            <p style='color: #9D0208; margin:0;'>El modelo predice una alta probabilidad de ataque al corazón.</p>
+            <p style='color: #9D0208; margin:0;'>El modelo predice una alta probabilidad de ataque al corazón basándose en los parámetros ingresados.</p>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
         <div style='background-color: #D8F3DC; padding: 20px; border-radius: 10px; border-left: 8px solid #2D6A4F;'>
             <h3 style='color: #2D6A4F; margin:0;'>✅ Riesgo Bajo Detectado</h3>
-            <p style='color: #1B4332; margin:0;'>El modelo predice una baja probabilidad de ataque al corazón.</p>
+            <p style='color: #1B4332; margin:0;'>El modelo predice una baja probabilidad de ataque al corazón basándose en los parámetros ingresados.</p>
         </div>
         """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    # Recordatorio del error como en el ejemplo original
+    st.warning("Recuerda: El modelo tiene un error aproximado del 5% de acuerdo a la matriz de confusión evaluada en pruebas.")
