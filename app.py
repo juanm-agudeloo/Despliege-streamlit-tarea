@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 import pickle
 filename = 'modelo-class.pkl'
-modelo, min_max_scaler, variables = pickle.load(open(filename, 'rb'))
+modelo, min_max_scaler, variables, _ = pickle.load(open(filename, 'rb'))
 
 # --- 1. CONFIGURACIÓN Y UI MEJORADA (COLORES) ---
 st.set_page_config(page_title="Predicción Cardíaca", page_icon="🫀", layout="centered")
