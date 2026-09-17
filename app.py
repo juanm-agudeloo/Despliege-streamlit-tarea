@@ -28,7 +28,7 @@ st.markdown("""
 # Se asume que el modelo guardado retorna 3 elementos al igual que en tu ejemplo
 try:
     filename = 'modelo.pkl' # Asegúrate de que este sea el nombre real de tu archivo
-    modelo, min_max_scaler, variables = pickle.load(open(filename, 'rb'))[cite: 3]
+    modelo, min_max_scaler, variables = pickle.load(open(filename, 'rb'))
 except Exception as e:
     st.error("Por favor, asegúrate de colocar tu archivo .pkl en la misma carpeta.")
 
@@ -49,8 +49,8 @@ with col2:
     heart_disease = st.selectbox('¿Enfermedad del corazón previa?[cite: 1]', ['Yes', 'No'])
 
 # Dataframe con la captura de datos
-datos = [[age, hypertension, heart_disease, ever_married, avg_glucose_level, smoking_status]][cite: 3]
-data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'ever_married', 'avg_glucose_level', 'smoking_status'])[cite: 3]
+datos = [[age, hypertension, heart_disease, ever_married, avg_glucose_level, smoking_status]]
+data = pd.DataFrame(datos, columns=['age', 'hypertension', 'heart_disease', 'ever_married', 'avg_glucose_level', 'smoking_status'])
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -58,20 +58,20 @@ st.markdown("<hr>", unsafe_allow_html=True)
 if st.button('🧠 Ejecutar Predicción', use_container_width=True):
 
     # Preparación de los datos futuros tal como en tu código original
-    data_preparada = data.copy()[cite: 3]
+    data_preparada = data.copy()
 
     # En despliegue drop_first= False
-    data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)[cite: 3]
+    data_preparada = pd.get_dummies(data_preparada, columns=['hypertension', 'heart_disease', 'ever_married', 'smoking_status'], drop_first=False, dtype=int)
 
     # Se adicionan las columnas faltantes (igualación con las variables del entrenamiento)
-    data_preparada = data_preparada.reindex(columns=variables, fill_value=0)[cite: 3]
+    data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
 
     # Se normalizan los datos numéricos (como Edad y Nivel de Glucosa)
     # En los despliegues no se llama fit, solo transform
-    data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])[cite: 3]
+    data_preparada[['age', 'avg_glucose_level']] = min_max_scaler.transform(data_preparada[['age', 'avg_glucose_level']])
 
     # Predicción
-    Y_pred = modelo.predict(data_preparada)[cite: 3]
+    Y_pred = modelo.predict(data_preparada)
 
     # --- 5. RESULTADO VISUAL MEJORADO ---
     st.markdown("<br>", unsafe_allow_html=True)
